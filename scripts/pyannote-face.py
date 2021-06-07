@@ -117,6 +117,24 @@ FACE_TEMPLATE = ('{t:.3f} {identifier:d} '
                  '{left:.3f} {top:.3f} {right:.3f} {bottom:.3f} '
                  '{status:s}\n')
 
+from tensorflow.keras import Model, layers
+from tensorflow.keras.applications import resnet
+from PIL import Image
+TENSORFLOW_EMBEDDING = "tensorflow"
+def create_embedding_model():
+    base_cnn = resnet.ResNet50(
+        weights="imagenet", input_shape=(224,224)+ (3,), include_top=False
+    )
+
+    flatten = layers.Flatten()(base_cnn.output)
+    print('flatten:', flatten)
+    dense1 = layers.Dense(512, activation="relu")(flatten)
+    dense1 = layers.BatchNormalization()(dense1)
+    dense2 = layers.Dense(256, activation="relu")(dense1)
+    dense2 = layers.BatchNormalization()(dense2)
+    output = layers.Dense(256)(dense2)
+    return Model(base_cnn.input, output, name="Embedding")
+
 
 def getFaceGenerator(tracking, frame_width, frame_height, double=True):
     """Parse precomputed face file and generate timestamped faces"""
@@ -268,7 +286,7 @@ def track(video, shot, output,
 
             foutput.flush()
 
-def extract(video, landmark_model, embedding_model, tracking, landmark_output, embedding_output):
+def extract(video, landmark_model, embedding_model, tracking, landmark_output, embedding_output, embedding_using_tensorflow=False):
     """Facial features detection"""
 
     # face generator
@@ -278,8 +296,13 @@ def extract(video, landmark_model, embedding_model, tracking, landmark_output, e
                                      double=False)
     faceGenerator.send(None)
 
-    face = Face(landmarks=landmark_model,
-                embedding=embedding_model)
+    if embedding_using_tensorflow:
+        face = Face(landmarks=landmark_model,
+                    embedding_model=create_embedding_model())
+    else:
+        face = Face(landmarks=landmark_model,
+                    embedding=embedding_model)
+
 
     with open(landmark_output, 'w') as flandmark, \
          open(embedding_output, 'w') as fembedding:
@@ -451,7 +474,7 @@ if __name__ == '__main__':
         landmarks = arguments['<landmarks>']
         embeddings = arguments['<embeddings>']
         extract(video, landmark_model, embedding_model, tracking,
-                landmarks, embeddings)
+                landmarks, embeddings, embedding_using_tensorflow=(embeddings == TENSORFLOW_EMBEDDING))
 
 
     if arguments['demo']:

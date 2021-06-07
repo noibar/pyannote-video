@@ -38,7 +38,7 @@ DLIB_SMALLEST_FACE = 36
 class Face(object):
     """Face processing"""
 
-    def __init__(self, landmarks=None, embedding=None):
+    def __init__(self, landmarks=None, embedding=None, embedding_model=None):
         """Face detection
 
         Parameters
@@ -61,6 +61,9 @@ class Face(object):
         if embedding is not None:
             self.face_recognition_ = dlib.face_recognition_model_v1(embedding)
 
+        if embedding_model is not None:
+            self.embedding_model = embedding_model
+
     def iterfaces(self, rgb):
         """Iterate over all detected faces"""
         for face in self.face_detector_(rgb, 1):
@@ -70,7 +73,20 @@ class Face(object):
         return self.shape_predictor_(rgb, face)
         #return np.float32([(p.x, p.y) for p in landmarks.parts()])
 
+    def get_model_embedding(self, rgb, landmarks):
+        rect = landmarks.rect
+        rect = (rect.left(), rect.top(), rect.right() +1 ,rect.bottom() +1)
+        image = Image.fromarray(rgb, mode='RGB')
+        image = image.crop(rect)
+        image = np.array(image)
+        image = cv2.resize(image, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
+        return self.embedding_model(resnet.preprocess_input(np.array([image])))[0]
+
+
     def get_embedding(self, rgb, landmarks):
+        if self.embedding_model is not None:
+            return self.get_model_embedding(rgb, landmarks)
+
         embedding = self.face_recognition_.compute_face_descriptor(
             rgb, landmarks)
         return embedding
